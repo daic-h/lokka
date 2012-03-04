@@ -63,8 +63,10 @@ module Lokka
     end
 
     def load_plugin(app)
-      names = []
-      Dir["#{Lokka.root}/public/plugin/lokka-*/lib/lokka/*.rb"].each do |path|
+      gem_plugin_dir = Gem.find_files('lokka/lokka-*.rb')
+      old_plugin_dir = Dir["#{Lokka.root}/public/plugin/lokka-*/lib/lokka/*.rb"]
+
+      (gem_plugin_dir + old_plugin_dir).each do |path|
         path = Pathname.new(path)
         lib = path.parent.parent
         root = lib.parent
@@ -72,9 +74,12 @@ module Lokka
         i18n = File.join(root, 'i18n')
         I18n.load_path += Dir["#{i18n}/*.yml"] if File.exist? i18n
         name = path.basename.to_s.split('.').first
+
+        defun_view_path(app, root, name)
         require "lokka/#{name}"
       end
 
+      names = []
       Lokka.constants.each do |name|
         const = Lokka.const_get(name)
         if const.respond_to? :registered
@@ -93,6 +98,19 @@ module Lokka
         end
       end
       app.set :plugins, plugins
+    end
+
+    def defun_view_path(app, plugin_root, plugin_name)
+      if plugin_name =~ /^lokka-(.*)/o
+        return unless (view_path = plugin_root + 'view').exist?
+
+        app.helpers do
+          define_method($1 + '_view') do |tpl_name|
+            view = "#{view_path}/#{tpl_name}"
+            File.open(view).read
+          end
+        end
+      end
     end
   end
 end
